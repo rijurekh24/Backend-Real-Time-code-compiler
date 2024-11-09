@@ -5,10 +5,20 @@ const { Server } = require("socket.io");
 const ACTIONS = require("./Action");
 require("dotenv").config();
 
+const cors = require("cors");
+
 const server = http.createServer(app);
-const io = new Server(server);
+
+app.use(cors());
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
 
 const userSocketMap = {};
+
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
     (socketId) => {
