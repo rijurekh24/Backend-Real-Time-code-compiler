@@ -1,16 +1,10 @@
 const express = require("express");
-const app = express();
 const http = require("http");
 const { Server } = require("socket.io");
-const ACTIONS = require("./Action");
 require("dotenv").config();
 
-const cors = require("cors");
-
+const app = express();
 const server = http.createServer(app);
-
-app.use(cors());
-
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -21,38 +15,34 @@ const userSocketMap = {};
 
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
-    (socketId) => {
-      return {
-        socketId,
-        username: userSocketMap[socketId],
-      };
-    }
+    (socketId) => ({
+      socketId,
+      username: userSocketMap[socketId],
+    })
   );
 }
 
 io.on("connection", (socket) => {
-  console.log("socket connected", socket.id);
+  console.log("New client connected: ", socket.id);
 
-  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
+  socket.on("JOIN", ({ roomId, username }) => {
     userSocketMap[socket.id] = username;
     socket.join(roomId);
 
     const clients = getAllConnectedClients(roomId);
     clients.forEach(({ socketId }) => {
-      io.to(socketId).emit(ACTIONS.JOINED, {
+      io.to(socketId).emit("JOINED", {
         clients,
         username,
         socketId: socket.id,
       });
     });
+
+    console.log(`${username} joined room ${roomId}`);
   });
 
-  socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
-    socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
-  });
-
-  socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
-    io.to(socketId).emit(ACTIONS.CODE_CHANGE, { code });
+  socket.on("CODE_CHANGE", ({ roomId, code }) => {
+    socket.in(roomId).emit("CODE_CHANGE", { code });
   });
 
   socket.on("SEND_MESSAGE", ({ roomId, message }) => {
@@ -70,15 +60,18 @@ io.on("connection", (socket) => {
   socket.on("disconnecting", () => {
     const rooms = [...socket.rooms];
     rooms.forEach((roomId) => {
-      socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
+      socket.in(roomId).emit("DISCONNECTED", {
         socketId: socket.id,
         username: userSocketMap[socket.id],
       });
     });
+
     delete userSocketMap[socket.id];
     socket.leave();
   });
 });
 
 const PORT = process.env.PORT || 8000;
-server.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
